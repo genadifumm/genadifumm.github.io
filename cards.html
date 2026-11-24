@@ -18,14 +18,37 @@
 <body>
 <script>
   // דף עוטף בלבד: אין כאן שום נתון. הכתובת והקוד מגיעים רק מהקישור האישי (#מזהה~קוד) ונשמרים בטלפון.
+  // מהר (24.11.26): הטלפון שומר עותק של הכרטיסיות. פתיחה = מציגים את העותק מיד, ומביאים חדש מגוגל ברקע.
   (function () {
     var h = location.hash.slice(1), ok = /^[A-Za-z0-9_-]{20,120}~[A-Za-z0-9_-]{8,80}$/;
-    try { if (ok.test(h)) localStorage.setItem("k", h); else h = localStorage.getItem("k") || ""; } catch (e) {}
+    var get = function (k) { try { return localStorage.getItem(k); } catch (e) { return null; } };
+    var put = function (k, v) { try { localStorage.setItem(k, v); } catch (e) {} };
+    if (ok.test(h)) put("k", h); else h = get("k") || "";
     if (!ok.test(h)) { document.body.innerHTML = "<p>חסר הקישור האישי. פתח את הקישור המלא פעם אחת.</p>"; return; }
-    var p = h.split("~"), f = document.createElement("iframe");
-    f.src = "https://script.google.com/macros/s/" + p[0] + "/exec?page=cards&token=" + encodeURIComponent(p[1]);
-    f.referrerPolicy = "no-referrer";
-    document.body.appendChild(f);
+    var p = h.split("~"), base = "https://script.google.com/macros/s/" + p[0] + "/exec?token=" + encodeURIComponent(p[1]);
+    var f = null, shown = null;
+    var same = function (a, b) { var s = function (x) { return String(x).replace(/"builtAt": [\d.]+/, ""); }; return a && b && s(a) === s(b); };
+    // בעותק (srcdoc) הדפדפן לא מרשה לשנות את הכתובת, והדף נעצר לפני שהוא גולל לחתונה. כאן אין כתובת לשמור, אז מבטלים
+    var SHIM = '<script>try { history.replaceState = history.pushState = function () {}; } catch (e) {}<\/script>';
+    function show(html) {
+      if (!f) { f = document.createElement("iframe"); document.body.appendChild(f); }
+      var i = html.indexOf("<head>");
+      f.srcdoc = i < 0 ? SHIM + html : html.slice(0, i + 6) + SHIM + html.slice(i + 6);
+      shown = html;
+    }
+    var saved = get("html");
+    if (saved) show(saved);   // מיד, מהעותק בטלפון (עובד גם בלי קליטה)
+    fetch(base + "&action=cardshtml", { cache: "no-store", referrerPolicy: "no-referrer" })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (!d || !d.ok || !d.html) throw 0;
+        put("html", d.html);
+        if (!shown || !same(shown, d.html)) show(d.html);   // רק אם באמת השתנה משהו (לא רק שעת ההכנה), כדי לא לקפוץ באמצע
+      })
+      .catch(function () {   // אין קליטה או שהסקריפט לא ענה: אם אין עותק, הדרך הישנה
+        if (!shown) { f = document.createElement("iframe"); f.src = base + "&page=cards"; f.referrerPolicy = "no-referrer"; document.body.appendChild(f); }
+      });
+    if ("serviceWorker" in navigator) navigator.serviceWorker.register("cards-sw.js").catch(function () {});   // שהדף עצמו ייפתח גם בלי קליטה
   })();
 </script>
 </body>
