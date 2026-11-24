@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex">
+<title>כרטיסיות</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #f3f1ec; }
+  iframe { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; }
+  p { font: 16px -apple-system, system-ui, sans-serif; color: #555; text-align: center; padding: 40px 20px; }
+</style>
+</head>
+<body>
+<script>
+  // דף עוטף בלבד: אין כאן שום נתון. הכתובת והקוד מגיעים רק מהקישור האישי (#מזהה~קוד) ונשמרים בטלפון.
+  (function () {
+    var h = location.hash.slice(1), ok = /^[A-Za-z0-9_-]{20,120}~[A-Za-z0-9_-]{8,80}$/;
+    try { if (ok.test(h)) localStorage.setItem("k", h); else h = localStorage.getItem("k") || ""; } catch (e) {}
+    if (!ok.test(h)) { document.body.innerHTML = "<p>חסר הקישור האישי. פתח את הקישור המלא פעם אחת.</p>"; return; }
+    var p = h.split("~"), f = document.createElement("iframe");
+    f.src = "https://script.google.com/macros/s/" + p[0] + "/exec?page=cards&token=" + encodeURIComponent(p[1]);
+    f.referrerPolicy = "no-referrer";
+    document.body.appendChild(f);
+  })();
+</script>
+</body>
+</html>
