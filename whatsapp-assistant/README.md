@@ -2,84 +2,69 @@
 
 # עוזר אישי בוואטסאפ (Claude)
 
-עוזר שאתה כותב לו בוואטסאפ, והוא עונה.
+אתה כותב לו בוואטסאפ, והוא עונה.
 הוא גם שולח לך הודעות בעצמו: תזכורות והודעת בוקר.
 
-רק דרכים רשמיות:
+רק שירותים רשמיים:
 - **WhatsApp Cloud API** של Meta.
-- **Claude API** של Anthropic.
-- שרת קטן ב-Python שרץ אצלך בענן.
+- **Claude API** של Anthropic, עם המודל החסכוני Haiku.
+- **Cloudflare Workers**, שרת חינמי.
 
 ## מה הוא יודע לעשות
-- שיחה רגילה, בעברית.
-- "תזכיר לי מחר ב-9 להתקשר לרופא" → שולח לך הודעה בזמן.
-- "מה התזכורות שלי?" / "בטל תזכורת 3".
+- שיחה רגילה בעברית.
+- "תזכיר לי מחר ב-9 להתקשר לרופא".
+- "מה התזכורות שלי?" או "בטל תזכורת 3".
 - חיפוש ברשת לשאלות עדכניות.
-- הודעת בוקר יומית (אפשר לכבות).
+- הודעת בוקר ב-8:00.
 - `/איפוס` מנקה את זיכרון השיחה.
-- עונה רק למספר שלך. כל מספר אחר נחסם.
+- עונה רק למספר שלך.
 
-## מה צריך
-1. מפתח API של Anthropic: console.anthropic.com.
-2. חשבון Meta for Developers: developers.facebook.com.
-3. מספר טלפון נוסף לבוט (לא המספר הפרטי שלך).
-4. שרת עם כתובת https. למשל Railway, Render, Fly.io או VPS.
+## עלות משוערת
+- שרת: **חינם**.
+- Claude: פחות מ-$1 לחודש בשימוש רגיל.
+- וואטסאפ: חינם בתוך 24 שעות מההודעה האחרונה שלך. אחרי זה, אגורות להודעה.
 
-## הקמה, שלב אחר שלב
+## הקמה (אפשר מהטלפון)
 
-### 1. Meta
-1. ב-developers.facebook.com: צור App מסוג **Business**.
-2. הוסף את המוצר **WhatsApp**.
-3. ב-WhatsApp → API Setup: הוסף את מספר הבוט ואמת אותו.
-4. העתק את **Phone number ID** → `WA_PHONE_NUMBER_ID`.
-5. ב-App settings → Basic: העתק **App secret** → `WA_APP_SECRET`.
-6. ב-Business Settings → System users: צור משתמש, תן לו הרשאות `whatsapp_business_messaging` ו-`whatsapp_business_management`, וצור טוקן קבוע → `WA_TOKEN`.
+### 1. Anthropic
+1. ב-platform.claude.com פותחים חשבון וטוענים $5.
+2. ב-API Keys יוצרים מפתח ושומרים אותו.
 
-### 2. תבנית הודעה (לתזכורות)
-וואטסאפ מרשה לבוט לכתוב חופשי רק עד 24 שעות מההודעה האחרונה שלך.
-אחרי זה חייבים תבנית מאושרת.
-1. ב-WhatsApp Manager → Message templates → Create.
-2. שם: `assistant_notification`, שפה: Hebrew, קטגוריה: Utility.
-3. גוף ההודעה: `{{1}}`
-4. חכה לאישור (בדרך כלל דקות).
+### 2. Meta
+1. ב-developers.facebook.com יוצרים App ומוסיפים WhatsApp.
+2. ב-API Setup שומרים את **Phone number ID**.
+3. מוסיפים את המספר שלך כנמען.
+4. ב-App settings → Basic שומרים את **App secret**.
+5. יוצרים טוקן קבוע דרך System user.
+6. יוצרים תבנית בשם `assistant_notification` בעברית, קטגוריה Utility, וגוף `{{1}}`.
 
-### 3. העלאה לשרת
-1. העתק את `.env.example` ל-`.env` ומלא את הערכים.
-2. `OWNER_PHONE` = המספר שלך, ספרות בלבד, עם 972. למשל `972521234567`.
-3. הרץ עם Docker:
-```
-docker build -t wa-assistant .
-docker run -d --env-file .env -v wa-data:/data -p 8000:8000 wa-assistant
-```
-4. ודא ש-`https://הכתובת-שלך/health` מחזיר `{"ok":true}`.
+### 3. Cloudflare
+1. ב-dash.cloudflare.com פותחים חשבון חינמי.
+2. נכנסים ל-Workers & Pages → Create → Import a repository.
+3. בוחרים את הריפו הזה, ומגדירים Root directory: `whatsapp-assistant`.
+4. ב-Settings → Variables and Secrets מוסיפים את הסודות הבאים:
 
-### 4. חיבור ה-Webhook
-1. ב-WhatsApp → Configuration → Webhook.
-2. Callback URL: `https://הכתובת-שלך/webhook`
-3. Verify token: אותו ערך כמו `WA_VERIFY_TOKEN`.
-4. Subscribe לשדה **messages**.
+| שם | ערך |
+|---|---|
+| `ANTHROPIC_API_KEY` | המפתח מ-Anthropic |
+| `WA_TOKEN` | הטוקן מ-Meta |
+| `WA_PHONE_NUMBER_ID` | ה-Phone number ID |
+| `WA_APP_SECRET` | ה-App secret |
+| `WA_VERIFY_TOKEN` | מילה סודית שתבחר |
+| `OWNER_PHONE` | המספר שלך, למשל `972521234567` |
+
+### 4. חיבור
+1. ב-Meta → WhatsApp → Configuration מגדירים Callback URL:
+   `https://whatsapp-assistant.<שם-החשבון>.workers.dev/webhook`
+2. Verify token: אותה מילה כמו `WA_VERIFY_TOKEN`.
+3. עושים Subscribe לשדה **messages**.
 
 ### 5. בדיקה
-שלח לבוט "היי" מהמספר שלך.
+שולחים לבוט "היי".
 
-## הגדרות שימושיות
-| משתנה | מה עושה |
-|---|---|
-| `CLAUDE_EFFORT` | `low` = מהיר וזול. `high` = יסודי יותר. |
-| `DAILY_BRIEF_HOUR` | שעת הודעת בוקר. ריק = כבוי. |
-| `TIMEZONE` | ברירת מחדל `Asia/Jerusalem`. |
-| `HISTORY_LIMIT` | כמה הודעות אחרונות הוא זוכר. |
-
-## עלויות
-- Claude: לפי שימוש.
-- וואטסאפ: הודעות בתוך חלון 24 שעות חינם. הודעות תבנית בתשלום קטן.
-- שרת: לרוב כמה דולרים בחודש.
-
-## קבצים
-- `app.py` — השרת, ה-Webhook ותזמון ההודעות.
-- `assistant.py` — החיבור ל-Claude והכלים (תזכורות).
-- `whatsapp.py` — שליחת הודעות דרך ה-API הרשמי.
-- `storage.py` — מסד נתונים SQLite.
-- `config.py` — הגדרות ממשתני סביבה.
+## הגדרות (בקובץ wrangler.toml)
+- `CLAUDE_MODEL`: המודל. ברירת המחדל: `claude-haiku-5-5`.
+- `DAILY_BRIEF_HOUR`: שעת הודעת הבוקר. ריק = כבוי.
+- `TIMEZONE`: אזור הזמן.
 
 </div>

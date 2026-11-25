@@ -1,0 +1,26 @@
+name = "whatsapp-assistant"
+main = "src/index.ts"
+compatibility_date = "2026-11-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Runs every minute: sends due reminders and the morning message.
+[triggers]
+crons = ["* * * * *"]
+
+# Free SQL database. Created automatically on first deploy.
+[[d1_databases]]
+binding = "DB"
+database_name = "whatsapp-assistant"
+
+[vars]
+CLAUDE_MODEL = "claude-haiku-5-5"
+CLAUDE_EFFORT = "low"
+TIMEZONE = "Asia/Jerusalem"
+DAILY_BRIEF_HOUR = "8"
+HISTORY_LIMIT = "30"
+WA_API_VERSION = "v23.0"
+WA_TEMPLATE_NAME = "assistant_notification"
+WA_TEMPLATE_LANG = "he"
+
+# Secrets (set in the Cloudflare dashboard, never in this file):
+# ANTHROPIC_API_KEY, WA_TOKEN, WA_PHONE_NUMBER_ID, WA_APP_SECRET, WA_VERIFY_TOKEN, OWNER_PHONE

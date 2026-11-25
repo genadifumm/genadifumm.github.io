@@ -1,0 +1,21 @@
+export interface Env {
+  DB: D1Database;
+
+  // secrets
+  ANTHROPIC_API_KEY: string;
+  WA_TOKEN: string;
+  WA_PHONE_NUMBER_ID: string;
+  WA_APP_SECRET: string;
+  WA_VERIFY_TOKEN: string;
+  OWNER_PHONE: string; // digits only, e.g. 972521234567
+
+  // plain settings (wrangler.toml [vars])
+  CLAUDE_MODEL: string;
+  CLAUDE_EFFORT: "low" | "medium" | "high";
+  TIMEZONE: string;
+  DAILY_BRIEF_HOUR: string; // "" = off
+  HISTORY_LIMIT: string;
+  WA_API_VERSION: string;
+  WA_TEMPLATE_NAME: string;
+  WA_TEMPLATE_LANG: string;
+}
