@@ -137,9 +137,13 @@ export function localParts(env: Env, ms = Date.now()) {
   return { date: `${p.year}-${p.month}-${p.day}`, time: `${p.hour}:${p.minute}`, hour: Number(p.hour), weekday: p.weekday, offset };
 }
 
+function heDay(env: Env, ms: number): string {
+  return new Intl.DateTimeFormat("he-IL", { timeZone: env.TIMEZONE, weekday: "long" }).format(new Date(ms));
+}
+
 function fmtLocal(env: Env, ms: number): string {
   const p = localParts(env, ms);
-  return `${p.date} ${p.time}`;
+  return `${heDay(env, ms)} ${p.date} ${p.time}`;
 }
 
 // ---------- tools ----------
@@ -183,11 +187,38 @@ async function runTool(env: Env, name: string, input: any): Promise<string> {
 // ---------- main loop ----------
 function systemFor(env: Env): string {
   const p = localParts(env);
-  return `${SYSTEM_PROMPT}\n\nCurrent local time: ${p.weekday} ${p.date} ${p.time}, timezone ${env.TIMEZONE} (UTC${p.offset}).`;
+  const now = Date.now();
+  const week = Array.from({ length: 8 }, (_, i) => {
+    const ms = now + i * 86_400_000;
+    return `${heDay(env, ms)} ${localParts(env, ms).date}`;
+  }).join(", ");
+  return `${SYSTEM_PROMPT}\n\nNow: ${heDay(env, now)} ${p.date} ${p.time}, timezone ${env.TIMEZONE} (UTC${p.offset}).\nThe next days: ${week}. Always take weekdays from this list. Write day names in Hebrew.`;
 }
 
 function textOf(content: Anthropic.ContentBlock[]): string {
   return content.filter((b): b is Anthropic.TextBlock => b.type === "text").map((b) => b.text).join("\n").trim();
+}
+
+// Haiku sometimes "thinks out loud" in the reply ("... לא, רגע, נכון: ..."). If so, rewrite it once.
+const DRAFT_SIGNS = /(\.\.\.|…)\s*(לא|רגע|חכה)|(^|\s)לא,\s*(חכה|רגע)|^\s*(רגע|חכה)[,.]|אני מתקן|תיקון לתשובה|[A-Za-z]*[áéíóúñ][a-z]*/m;
+
+async function cleanDraft(client: Anthropic, env: Env, text: string): Promise<string> {
+  if (!DRAFT_SIGNS.test(text)) return text;
+  try {
+    const r = await client.messages.create({
+      model: env.CLAUDE_MODEL,
+      max_tokens: 4000,
+      system: "You edit WhatsApp messages. Return only the edited message, nothing else.",
+      messages: [{
+        role: "user",
+        content: `This reply contains self-corrections or drafts. Rewrite it so it states only the final, corrected information, in the same language and format. Remove hesitations, corrections and foreign words. Do not add any facts.\n\n${text}`,
+      }],
+      output_config: { effort: "low" },
+    });
+    return textOf(r.content) || text;
+  } catch {
+    return text;
+  }
 }
 
 export async function reply(env: Env, userText: string): Promise<string> {
@@ -249,6 +280,7 @@ export async function reply(env: Env, userText: string): Promise<string> {
   }
 
   text = text.replace(/\s*\[tools:[^\]]*\]\s*$/, "").trim() || "👍";
+  text = await cleanDraft(client, env, text);
   // Keep a note of the tools behind this reply, so later turns know it was checked.
   await db.addMessage(env, "assistant", used.size ? `${text}\n\n[tools: ${[...used].join(", ")}]` : text);
   return text;
