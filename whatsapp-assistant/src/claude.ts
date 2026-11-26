@@ -18,7 +18,12 @@ Before calendar_add_event: check that time with calendar_events, then tell the o
 You can read two Google Sheets (read_sheet), read only:
 - "work": the "עבודה" sheet. One tab per year (the shoot year), one row per couple: project name, shoot date, stills photographer, venue, production, lead source, notes, songs, editing, status, deposit, price, income, delivery date.
 - "tasks": the "ניהול משימות" sheet, tabs "משימות" (tasks) and "הוצאות קבועות" (fixed expenses).
-Call read_sheet without a tab first if you are not sure of the tab names. You cannot change the sheets; say so if asked.`;
+Call read_sheet without a tab first if you are not sure of the tab names. You cannot change the sheets; say so if asked.
+
+How to answer:
+- Get all the facts with tools first, check them, and only then write. The reply is sent exactly as you write it, so never write drafts, "wait", second thoughts or corrections inside a reply.
+- Say you checked something (calendar, sheet, web) only if you called the tool for it while answering this message.
+- In the history, each of your earlier replies ends with a note in square brackets listing the tools used for it, e.g. [tools: calendar_events]. Trust those notes. Never write such a note yourself, and never apologise for earlier replies unless the owner says something was wrong.`;
 
 const CUSTOM_TOOLS: Anthropic.Tool[] = [
   {
@@ -166,6 +171,7 @@ export async function reply(env: Env, userText: string): Promise<string> {
   const system = systemFor(env);
   let tools: Anthropic.ToolUnion[] = [...CUSTOM_TOOLS, WEB_SEARCH];
   let text = "משהו השתבש, נסה שוב.";
+  const used = new Set<string>();
 
   for (let round = 0; round < 8; round++) {
     let response: Anthropic.Message;
@@ -197,6 +203,7 @@ export async function reply(env: Env, userText: string): Promise<string> {
 
     if (response.stop_reason === "pause_turn") continue; // long web search; let it continue
 
+    for (const b of response.content) if (b.type === "tool_use" || b.type === "server_tool_use") used.add(b.name);
     const toolUses = response.content.filter((b): b is Anthropic.ToolUseBlock => b.type === "tool_use");
     if (response.stop_reason !== "tool_use" || toolUses.length === 0) {
       text = textOf(response.content) || "👍";
@@ -214,7 +221,9 @@ export async function reply(env: Env, userText: string): Promise<string> {
     messages.push({ role: "user", content: results });
   }
 
-  await db.addMessage(env, "assistant", text);
+  text = text.replace(/\s*\[tools:[^\]]*\]\s*$/, "").trim() || "👍";
+  // Keep a note of the tools behind this reply, so later turns know it was checked.
+  await db.addMessage(env, "assistant", used.size ? `${text}\n\n[tools: ${[...used].join(", ")}]` : text);
   return text;
 }
 
