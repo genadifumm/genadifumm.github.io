@@ -25,9 +25,13 @@ HISTORY_LIMIT = "30"
 WA_API_VERSION = "v23.0"
 WA_TEMPLATE_NAME = "assistant_notification"
 WA_TEMPLATE_LANG = "he"
+# Google Sheets the assistant may read (shared with its service account).
+WORK_SHEET_ID = "1h3cUdThJKXMqexrDuxFCBOAXisYTdRNJ8zjvgPh9Xdg"
+TASKS_SHEET_ID = "1TAEy13RLRHzJGdbApWTDd_658iCeP3JroD7vTRPscdc"
 
 # Secrets (set in the Cloudflare dashboard, never in this file):
-# ANTHROPIC_API_KEY, WA_TOKEN, WA_PHONE_NUMBER_ID, WA_APP_SECRET, WA_VERIFY_TOKEN, OWNER_PHONE
+# ANTHROPIC_API_KEY, WA_TOKEN, WA_PHONE_NUMBER_ID, WA_APP_SECRET, WA_VERIFY_TOKEN, OWNER_PHONE,
+# GOOGLE_SA_KEY, GOOGLE_CALENDAR_ID
 
 # Keep logs on (otherwise every deploy from GitHub turns them off).
 [observability]
