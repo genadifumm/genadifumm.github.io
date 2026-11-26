@@ -18,7 +18,7 @@ binding = "AI"
 
 [vars]
 CLAUDE_MODEL = "claude-haiku-5-5"
-CLAUDE_EFFORT = "low"
+CLAUDE_EFFORT = "medium"
 TIMEZONE = "Asia/Jerusalem"
 DAILY_BRIEF_HOUR = "8"
 HISTORY_LIMIT = "30"
