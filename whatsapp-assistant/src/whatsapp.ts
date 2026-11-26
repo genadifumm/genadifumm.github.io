@@ -67,3 +67,14 @@ export async function markRead(env: Env, messageId: string): Promise<void> {
     await post(env, { messaging_product: "whatsapp", status: "read", message_id: messageId });
   } catch { /* non-critical */ }
 }
+
+/** Download a media file (e.g. a voice note) that the owner sent. */
+export async function downloadMedia(env: Env, mediaId: string): Promise<ArrayBuffer> {
+  const auth = { Authorization: `Bearer ${env.WA_TOKEN}` };
+  const meta = await fetch(`https://graph.facebook.com/${env.WA_API_VERSION}/${mediaId}`, { headers: auth });
+  if (!meta.ok) throw new Error(`media lookup ${meta.status}: ${await meta.text()}`);
+  const { url } = await meta.json<{ url: string }>();
+  const file = await fetch(url, { headers: auth });
+  if (!file.ok) throw new Error(`media download ${file.status}`);
+  return file.arrayBuffer();
+}

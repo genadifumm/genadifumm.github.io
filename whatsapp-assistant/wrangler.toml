@@ -12,6 +12,10 @@ crons = ["* * * * *"]
 binding = "DB"
 database_name = "whatsapp-assistant"
 
+# Speech-to-text for voice messages (Workers AI, free daily allowance).
+[ai]
+binding = "AI"
+
 [vars]
 CLAUDE_MODEL = "claude-haiku-5-5"
 CLAUDE_EFFORT = "low"

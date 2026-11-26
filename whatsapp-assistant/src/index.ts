@@ -3,10 +3,29 @@ import type { Env } from "./env";
 import * as db from "./db";
 import * as wa from "./whatsapp";
 import { dailyBrief, localParts, reply } from "./claude";
+import { transcribe } from "./voice";
 
-async function handleText(env: Env, msgId: string, text: string): Promise<void> {
+async function handleVoice(env: Env, msgId: string, mediaId: string): Promise<void> {
+  let text: string;
   try {
     await wa.markRead(env, msgId);
+    text = await transcribe(env, mediaId);
+  } catch (e) {
+    console.error("transcription failed", e);
+    await wa.sendText(env, "⚠️ לא הצלחתי לשמוע את ההקלטה. נסה שוב או כתוב לי.").catch(() => {});
+    return;
+  }
+  if (!text) {
+    await wa.sendText(env, "לא שמעתי כלום בהקלטה 🤷").catch(() => {});
+    return;
+  }
+  await wa.sendText(env, `🎤 _${text}_`).catch(() => {}); // show what was heard
+  await handleText(env, msgId, `[הודעה קולית] ${text}`, false);
+}
+
+async function handleText(env: Env, msgId: string, text: string, markRead = true): Promise<void> {
+  try {
+    if (markRead) await wa.markRead(env, msgId);
     if (["/reset", "/איפוס"].includes(text.trim())) {
       await db.clearHistory(env);
       await wa.sendText(env, "השיחה אופסה ✅");
@@ -58,8 +77,10 @@ export default {
           // Answer Meta right away; the reply is sent in the background.
           if (msg.type === "text") {
             ctx.waitUntil(handleText(env, msg.id, msg.text.body));
+          } else if (msg.type === "audio") {
+            ctx.waitUntil(handleVoice(env, msg.id, msg.audio.id));
           } else {
-            ctx.waitUntil(wa.sendText(env, "כרגע אני מבין רק הודעות טקסט 🙂").catch(console.error));
+            ctx.waitUntil(wa.sendText(env, "כרגע אני מבין טקסט והודעות קוליות 🙂").catch(console.error));
           }
         }
       }

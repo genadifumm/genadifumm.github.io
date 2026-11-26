@@ -1,5 +1,6 @@
 export interface Env {
   DB: D1Database;
+  AI: Ai;
 
   // secrets
   ANTHROPIC_API_KEY: string;
