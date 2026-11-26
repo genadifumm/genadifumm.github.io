@@ -8,7 +8,7 @@ const SYSTEM_PROMPT = `You are the owner's personal assistant, talking to them o
 Reply in the language the owner writes in (usually Hebrew).
 Keep replies short and easy to read on a phone: short lines, no tables or headings.
 WhatsApp formatting only: *bold*, _italic_, simple "- " lists.
-When the owner asks to be reminded of something, use the set_reminder tool.
+When the owner asks to be reminded of something, use the set_reminder tool. To change one, use list_reminders and then move_reminder.
 Interpret times in the owner's timezone. If a time is ambiguous, pick the sensible one and say which.
 Use web search only when the answer depends on current information.
 Voice messages from the owner reach you already transcribed to text, starting with the words "הודעה קולית". Treat that text as exactly what the owner said and answer it normally; infer the meaning past small transcription mistakes. Never say you cannot hear voice messages.
@@ -22,7 +22,9 @@ Call read_sheet without a tab first if you are not sure of the tab names. You ca
 
 How to answer:
 - Get all the facts with tools first, check them, and only then write. The reply is sent exactly as you write it, so never write drafts, "wait", second thoughts or corrections inside a reply.
-- Say you checked something (calendar, sheet, web) only if you called the tool for it while answering this message.
+- Say you checked or did something (calendar, sheet, reminder, web) only if a tool call for it succeeded while answering this message. If a tool failed, say it failed.
+- If you have no tool for what the owner asks, say so in your first line, and offer what you can do instead.
+- Short follow-ups like "את זה", "תכניס את זה" or "גם" refer to what was just discussed. Use that; do not ask what they mean.
 - In the history, each of your earlier replies ends with a note in square brackets listing the tools used for it, e.g. [tools: calendar_events]. Trust those notes. Never write such a note yourself, and never apologise for earlier replies unless the owner says something was wrong.`;
 
 const CUSTOM_TOOLS: Anthropic.Tool[] = [
@@ -48,6 +50,21 @@ const CUSTOM_TOOLS: Anthropic.Tool[] = [
     description: "List reminders that have not been sent yet.",
     strict: true,
     input_schema: { type: "object", properties: {}, required: [], additionalProperties: false },
+  },
+  {
+    name: "move_reminder",
+    description: "Change the time and/or text of a pending reminder.",
+    strict: true,
+    input_schema: {
+      type: "object",
+      properties: {
+        id: { type: "integer" },
+        when: { type: "string", description: "New ISO 8601 date-time WITH UTC offset" },
+        text: { type: "string", description: "New text, or empty string to keep the old text" },
+      },
+      required: ["id", "when", "text"],
+      additionalProperties: false,
+    },
   },
   {
     name: "cancel_reminder",
@@ -139,6 +156,16 @@ async function runTool(env: Env, name: string, input: any): Promise<string> {
     case "list_reminders": {
       const items = (await db.pendingReminders(env)).map((r) => ({ id: r.id, when: fmtLocal(env, r.due_at), text: r.text }));
       return items.length ? JSON.stringify(items) : "No pending reminders.";
+    }
+    case "move_reminder": {
+      const old = (await db.pendingReminders(env)).find((r) => r.id === input.id);
+      if (!old) throw new Error("No such pending reminder.");
+      if (!/[zZ]|[+-]\d\d:\d\d$/.test(input.when)) throw new Error("'when' must include a UTC offset.");
+      const due = Date.parse(input.when);
+      if (Number.isNaN(due) || due <= Date.now()) throw new Error("Invalid or past time.");
+      const id = await db.addReminder(env, due, input.text || old.text);
+      await db.cancelReminder(env, old.id);
+      return `Reminder moved: now #${id} at ${fmtLocal(env, due)}.`;
     }
     case "cancel_reminder":
       return (await db.cancelReminder(env, input.id)) ? "Cancelled." : "No such pending reminder.";
