@@ -2,6 +2,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { Env } from "./env";
 import * as db from "./db";
+import * as google from "./google";
 
 const SYSTEM_PROMPT = `You are the owner's personal assistant, talking to them over WhatsApp.
 Reply in the language the owner writes in (usually Hebrew).
@@ -9,7 +10,15 @@ Keep replies short and easy to read on a phone: short lines, no tables or headin
 WhatsApp formatting only: *bold*, _italic_, simple "- " lists.
 When the owner asks to be reminded of something, use the set_reminder tool.
 Interpret times in the owner's timezone. If a time is ambiguous, pick the sensible one and say which.
-Use web search only when the answer depends on current information.`;
+Use web search only when the answer depends on current information.
+Voice messages from the owner reach you already transcribed to text, starting with the words "הודעה קולית". Treat that text as exactly what the owner said and answer it normally; infer the meaning past small transcription mistakes. Never say you cannot hear voice messages.
+
+You can read the owner's Google Calendar (calendar_events) and add events to it (calendar_add_event).
+Before calendar_add_event: check that time with calendar_events, then tell the owner exactly what you will add (title, date, time) and any clash, and ask for a yes. Only add it after they confirm in their next message.
+You can read two Google Sheets (read_sheet), read only:
+- "work": the "עבודה" sheet. One tab per year (the shoot year), one row per couple: project name, shoot date, stills photographer, venue, production, lead source, notes, songs, editing, status, deposit, price, income, delivery date.
+- "tasks": the "ניהול משימות" sheet, tabs "משימות" (tasks) and "הוצאות קבועות" (fixed expenses).
+Call read_sheet without a tab first if you are not sure of the tab names. You cannot change the sheets; say so if asked.`;
 
 const CUSTOM_TOOLS: Anthropic.Tool[] = [
   {
@@ -43,6 +52,52 @@ const CUSTOM_TOOLS: Anthropic.Tool[] = [
       type: "object",
       properties: { id: { type: "integer" } },
       required: ["id"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "calendar_events",
+    description: "List events in the owner's Google Calendar between two times. Optionally filter by free text.",
+    strict: true,
+    input_schema: {
+      type: "object",
+      properties: {
+        from: { type: "string", description: "ISO 8601 date-time with UTC offset" },
+        to: { type: "string", description: "ISO 8601 date-time with UTC offset" },
+        query: { type: "string", description: "Free-text filter, or empty string for all events" },
+      },
+      required: ["from", "to", "query"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "calendar_add_event",
+    description: "Add an event to the owner's Google Calendar. Only after the owner confirmed the exact details.",
+    strict: true,
+    input_schema: {
+      type: "object",
+      properties: {
+        title: { type: "string" },
+        start: { type: "string", description: "ISO 8601 date-time with UTC offset, or YYYY-MM-DD for an all-day event" },
+        end: { type: "string", description: "Same format as start. For all-day events, the day AFTER the last day." },
+        location: { type: "string", description: "Or empty string" },
+        notes: { type: "string", description: "Or empty string" },
+      },
+      required: ["title", "start", "end", "location", "notes"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "read_sheet",
+    description: "Read a Google Sheet. Without a tab, returns the tab names. With a tab, returns its rows (numbered).",
+    strict: true,
+    input_schema: {
+      type: "object",
+      properties: {
+        sheet: { type: "string", enum: ["work", "tasks"] },
+        tab: { type: "string", description: "Tab name, or empty string to list the tabs" },
+      },
+      required: ["sheet", "tab"],
       additionalProperties: false,
     },
   },
@@ -82,6 +137,12 @@ async function runTool(env: Env, name: string, input: any): Promise<string> {
     }
     case "cancel_reminder":
       return (await db.cancelReminder(env, input.id)) ? "Cancelled." : "No such pending reminder.";
+    case "calendar_events":
+      return google.listEvents(env, input.from, input.to, input.query || undefined);
+    case "calendar_add_event":
+      return google.addEvent(env, input);
+    case "read_sheet":
+      return google.readSheet(env, input.sheet, input.tab || undefined);
     default:
       throw new Error(`Unknown tool: ${name}`);
   }
@@ -161,6 +222,11 @@ export async function dailyBrief(env: Env): Promise<string> {
   const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
   const today = localParts(env).date;
   const todays = (await db.pendingReminders(env)).filter((r) => localParts(env, r.due_at).date === today);
+  let events = "unknown";
+  if (google.googleReady(env)) {
+    const off = localParts(env).offset;
+    events = await google.listEvents(env, `${today}T00:00:00${off}`, `${today}T23:59:59${off}`).catch(() => "unknown");
+  }
   const response = await client.messages.create({
     model: env.CLAUDE_MODEL,
     max_tokens: 2000,
@@ -169,7 +235,7 @@ export async function dailyBrief(env: Env): Promise<string> {
       role: "user",
       content: `Write a very short good-morning WhatsApp message for the owner, in Hebrew. Today's reminders: ${
         todays.length ? JSON.stringify(todays.map((r) => `${fmtLocal(env, r.due_at)} ${r.text}`)) : "none"
-      }.`,
+      }. Today's calendar: ${events}.`,
     }],
     output_config: { effort: "low" },
   });
