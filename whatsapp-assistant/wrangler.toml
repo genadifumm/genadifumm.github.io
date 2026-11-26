@@ -28,3 +28,7 @@ WA_TEMPLATE_LANG = "he"
 
 # Secrets (set in the Cloudflare dashboard, never in this file):
 # ANTHROPIC_API_KEY, WA_TOKEN, WA_PHONE_NUMBER_ID, WA_APP_SECRET, WA_VERIFY_TOKEN, OWNER_PHONE
+
+# Keep logs on (otherwise every deploy from GitHub turns them off).
+[observability]
+enabled = true
